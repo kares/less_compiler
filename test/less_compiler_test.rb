@@ -7,37 +7,57 @@ class LessCompilerTest < ActiveSupport::TestCase
 
   setup :reset_class_variables, :clean_stylesheets_dir
 
-  test "destination_path defaults to source_path unless set" do
-    assert_equal LessCompiler.source_path, LessCompiler.destination_path
-    LessCompiler.destination_path = Dir.getwd
-    assert_not_equal LessCompiler.source_path, LessCompiler.destination_path
+  test "raises error on unsupported option" do
+    dir = File.join(STYLESHEETS_DIR, '1')
+    assert_raise RuntimeError do
+      LessCompiler.compile_stylesheets :source_path => Dir.getwd, :invalid_option => 42
+    end
   end
 
   test "1 - compiles less files with missing css files" do
-    LessCompiler.source_path = File.join(STYLESHEETS_DIR, '1')
+    LessCompiler.source_path = dir = File.join(STYLESHEETS_DIR, '1')
     LessCompiler.compile_stylesheets
 
-    assert File.exist?( "#{LessCompiler.destination_path}/another.css" )
-    assert File.exist?( "#{LessCompiler.destination_path}/some.css" )
+    assert File.exist?( "#{dir}/another.css" )
+    assert File.exist?( "#{dir}/some.css" )
   end
 
   test "1 - source_exclude is applied if set to a proc" do
-    LessCompiler.source_path = File.join(STYLESHEETS_DIR, '1')
+    LessCompiler.source_path = dir = File.join(STYLESHEETS_DIR, '1')
     LessCompiler.source_exclude = lambda do |file|
       File.basename(file) == 'some.less'
     end
     LessCompiler.compile_stylesheets
 
-    assert File.exist?( "#{LessCompiler.destination_path}/another.css" )
-    assert ! File.exist?( "#{LessCompiler.destination_path}/some.css" )
+    assert File.exist?( "#{dir}/another.css" )
+    assert ! File.exist?( "#{dir}/some.css" )
   end
 
   test "1 - source_exclude is applied if set to a regex" do
-    LessCompiler.source_path = File.join(STYLESHEETS_DIR, '1')
+    LessCompiler.source_path = dir = File.join(STYLESHEETS_DIR, '1')
     LessCompiler.compile_stylesheets :source_exclude => /another/
 
-    assert ! File.exist?( "#{LessCompiler.destination_path}/another.css" )
-    assert File.exist?( "#{LessCompiler.destination_path}/some.css" )
+    assert ! File.exist?( "#{dir}/another.css" )
+    assert File.exist?( "#{dir}/some.css" )
+  end
+
+  test "1 - doesn't compile if when_changed == :never" do
+    dir = File.join(STYLESHEETS_DIR, '1')
+    LessCompiler.compile_stylesheets :source_path => dir, :update_templates => :never
+
+    assert ! File.exist?( "#{dir}/another.css" )
+    assert ! File.exist?( "#{dir}/some.css" )
+  end
+
+  test "1 - compiles local less file even if global source_path is set" do
+    LessCompiler.source_path = gdir = File.join(STYLESHEETS_DIR, '2')
+    ldir = File.join(STYLESHEETS_DIR, '1')
+    some_css_mtime = File.mtime "#{gdir}/some.css"
+    sleep 1
+    LessCompiler.compile_stylesheets :source_path => ldir
+
+    assert File.exist?( "#{ldir}/some.css" )
+    assert_file_has_same_mtime "#{gdir}/some.css", some_css_mtime
   end
 
   test "2 - compiles less files that are newer than css files" do
@@ -50,8 +70,32 @@ class LessCompilerTest < ActiveSupport::TestCase
     another_css_mtime = File.mtime "#{dir}/another.css"
     LessCompiler.compile_stylesheets
 
-    assert_file_has_newer_mtime "#{LessCompiler.destination_path}/some.css", some_css_mtime
-    assert_file_has_same_mtime "#{LessCompiler.destination_path}/another.css", another_css_mtime
+    assert_file_has_newer_mtime "#{dir}/some.css", some_css_mtime
+    assert_file_has_same_mtime "#{dir}/another.css", another_css_mtime
+  end
+
+  test "2 - doesn't care about mtimes if when_changed == :never" do
+    dir = File.join(STYLESHEETS_DIR, '2')
+    FileUtils.touch [ "#{dir}/some.css" ]
+    sleep 1 # mtime seconds precision
+    FileUtils.touch [ "#{dir}/some.less" ]
+    some_css_mtime = File.mtime "#{dir}/some.css"
+
+    LessCompiler.compile_stylesheets :source_path => dir, :update_templates => :never
+
+    assert_file_has_same_mtime "#{dir}/some.css", some_css_mtime
+  end
+
+  test "2 - doesn't care about mtimes if when_changed == :allways" do
+    LessCompiler.source_path = dir = File.join(STYLESHEETS_DIR, '2')
+    LessCompiler.update_templates = :allways
+    FileUtils.touch [ "#{dir}/some.less" ]
+    FileUtils.touch [ "#{dir}/some.css" ]
+    some_css_mtime = File.mtime "#{dir}/some.css"
+    sleep 1 # mtime seconds precision
+    LessCompiler.compile_stylesheets
+
+    assert_file_has_newer_mtime "#{dir}/some.css", some_css_mtime
   end
 
   test "3 - partial less stylesheets are not compiled if pattern does not match" do
@@ -63,8 +107,8 @@ class LessCompilerTest < ActiveSupport::TestCase
     main_css_mtime = File.mtime "#{dir}/main.css"
     LessCompiler.compile_stylesheets
 
-    assert_file_has_newer_mtime "#{LessCompiler.destination_path}/main.css", main_css_mtime
-    assert ! File.exist?( "#{LessCompiler.destination_path}/_init.css" )
+    assert_file_has_newer_mtime "#{dir}/main.css", main_css_mtime
+    assert ! File.exist?( "#{dir}/_init.css" )
   end
 
   test "4 - partial less stylesheet update forces main compilation if check_imports is on" do
@@ -76,7 +120,7 @@ class LessCompilerTest < ActiveSupport::TestCase
     main_css_mtime = File.mtime "#{dir}/main.css"
     LessCompiler.compile_stylesheets :check_imports => true
 
-    assert_file_has_newer_mtime "#{LessCompiler.destination_path}/main.css", main_css_mtime
+    assert_file_has_newer_mtime "#{dir}/main.css", main_css_mtime
   end
 
   test "4 - partial less stylesheet update does not forces main compilation if check_imports is off" do
@@ -89,7 +133,7 @@ class LessCompilerTest < ActiveSupport::TestCase
     main_css_mtime = File.mtime "#{dir}/main.css"
     LessCompiler.compile_stylesheets
 
-    assert_file_has_same_mtime "#{LessCompiler.destination_path}/main.css", main_css_mtime
+    assert_file_has_same_mtime "#{dir}/main.css", main_css_mtime
   end
 
   protected

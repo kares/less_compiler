@@ -7,12 +7,7 @@ class LessCompiler
   if defined? ActionView::Helpers::AssetTagHelper::STYLESHEETS_DIR
     @@source_path = ActionView::Helpers::AssetTagHelper::STYLESHEETS_DIR
   end
-  cattr_accessor :source_path, :source_exclude
-
-  def self.destination_path
-    @@destination_path || source_path # make sure it defaults to source
-  end
-  cattr_writer :destination_path
+  cattr_accessor :source_path, :source_exclude, :destination_path
 
   @@less_pattern = '**/[^_]*.less' # "partials" excluded by default
   cattr_accessor :less_pattern
@@ -36,38 +31,50 @@ class LessCompiler
   end
 
   def initialize(attrs = {})
+    attrs = attrs.dup
     self.class.class_variables.each do |cvar|
       var = cvar[2..-1].to_sym # '@@name' -> :name
-      val = attrs.has_key?(var) ? attrs[var] : self.class.send(var)
+      val = attrs.has_key?(var) ? attrs.delete(var) : self.class.send(var)
       self.instance_variable_set(:"@#{var}", val)
     end
+    raise "unsupported option(s): #{attrs.keys.inspect}" unless attrs.empty?
+  end
+
+  attr_reader *self.class_variables.map { |cvar| cvar[2..-1].to_sym }
+
+  def destination_path
+    @destination_path || source_path # make sure it defaults to source
+  end
+
+  def compress?
+    !!compress
   end
 
   # Updates all stylesheets in the template_location and
   # create corresponding files in the destination_path.
   def compile_stylesheets
-    raise "source_path is required" unless @source_path
-    return if @update_templates == :never
+    raise "source_path is required" unless source_path
+    return if update_templates == :never
     # Recursively loop through the directory specified in source_path :
-    Dir.glob(File.join(@source_path, @less_pattern)).sort!.each do |stylesheet|
-      case @source_exclude
+    Dir.glob(File.join(source_path, less_pattern)).sort!.each do |stylesheet|
+      case source_exclude
         when Proc
-          excluded = @source_exclude.call(stylesheet)
+          excluded = source_exclude.call(stylesheet)
         when Regexp
-          excluded = stylesheet =~ @source_exclude
+          excluded = stylesheet =~ source_exclude
         when true # makes no sense
           excluded = true
         else
           excluded = false
       end
       if excluded
-        @logger.debug "LESS 'excluded' stylesheet: #{stylesheet}" if @logger
+        logger.debug "LESS 'excluded' stylesheet: #{stylesheet}" if logger
         next
       end
       # Update the current stylesheet if update is not :when_changed OR when
       # the less-file is newer than the css-file.
-      if @update_templates != :when_changed || needs_update?(stylesheet)
-        @logger.debug "LESS compiling stylesheet: #{stylesheet}" if @logger
+      if update_templates != :when_changed || needs_update?(stylesheet)
+        logger.debug "LESS compiling stylesheet: #{stylesheet}" if logger
         compile_stylesheet(stylesheet)
       end
     end
@@ -77,13 +84,13 @@ class LessCompiler
   def compile_stylesheet(stylesheet)
     relative_base = relative_base(stylesheet)
     # Remove the old generated stylesheet
-    css_file = File.join(@destination_path, "#{relative_base}.css")
+    css_file = File.join(destination_path, "#{relative_base}.css")
     #File.unlink(css_file) if File.exist?(css_file)
     # Generate the new stylesheet
     Less::Command.new(
       :source => stylesheet,
       :destination => css_file,
-      :compress => !! @compress # e.g. Rails.env.production?
+      :compress => compress? # e.g. Rails.env.production?
     ).parse( ! File.exist?(css_file) )
   end
 
@@ -91,10 +98,10 @@ class LessCompiler
 
   # Check if the specified stylesheet is in need of an update.
   def needs_update?(less_file)
-    css_file = File.join(@destination_path, "#{relative_base(less_file)}.css")
+    css_file = File.join(destination_path, "#{relative_base(less_file)}.css")
     return true unless File.exist?(css_file)
     File.mtime(less_file) > File.mtime(css_file) ||
-    (@check_imports && contains_updated_import?(less_file, css_file))
+    (check_imports && contains_updated_import?(less_file, css_file))
   end
 
   # TODO @import file + mtime caching to speed up things ...
@@ -137,7 +144,7 @@ class LessCompiler
 
   # Returns the relative base for the given stylesheet
   def relative_base(stylesheet)
-    path = stylesheet.sub(@source_path, '').sub('.less', '')
+    path = stylesheet.sub(source_path, '').sub('.less', '')
     path[0, 1] == '/' ? path[1..-1] : path
   end
 
