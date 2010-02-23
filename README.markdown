@@ -4,7 +4,7 @@ LESS Compiler
 Yet another LESS helper for stylesheet compilation.
 
 The main reason for creating this helper was to be able to compile
-less stylesheets to css every time their updated during development
+less stylesheets to css every time they change (during development)
 with correct handling of css/less @import 'file.less'; declarations.
 
 Configuration
