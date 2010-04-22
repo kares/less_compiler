@@ -1,5 +1,6 @@
 require 'less' unless defined? Less
 require 'active_support/core_ext/class/attribute_accessors'
+require 'action_view/helpers/asset_tag_helper' if defined? Rails
 
 # Yet another Less http://lesscss.org compiler.
 class LessCompiler
