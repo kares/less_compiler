@@ -101,5 +101,3 @@ For more information, see [http://lesscss.org](http://lesscss.org).
 
 Originaly inspired by [http://github.com/karsthammer/less-rails](less-rails).
 If this is not enought try [http://github.com/cloudhead/more](more).
-
-Copyright (c) 2009 Karol Bucek, released under the MIT license
