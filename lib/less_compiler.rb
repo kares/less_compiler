@@ -13,7 +13,7 @@ class LessCompiler
   @@less_pattern = '**/[^_]*.less' # "partials" excluded by default
   cattr_accessor :less_pattern
 
-  @@update_templates = :when_changed # :never, :when_changed or :allways
+  @@update_templates = :when_changed # :never, :when_changed or :always
   cattr_accessor :update_templates, :compress
 
   @@check_imports = true

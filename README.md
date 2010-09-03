@@ -5,12 +5,12 @@ Yet another LESS helper for stylesheet compilation.
 
 The main reason for creating this helper was to be able to compile
 less stylesheets to css every time they change (during development)
-with correct handling of css/less @import 'file.less'; declarations.
+with correct handling of css/less `@import 'file.less'` declarations.
 
 Configuration
 =============
 
-Source path for .less files, defaults to 'public/stylesheets' :
+Source path for .less files, defaults to `'public/stylesheets'` :
 
     LessCompiler.source_path = '/path/to/less/files'
 
@@ -25,32 +25,32 @@ Destination path for .css files, defaults to source path :
 
     LessCompiler.destination_path = '/path/to/css/files'
 
-Glob pattern for picking up less files, default '**/[^_]*.less' :
+Glob pattern for picking up less files, default `'**/[^_]*.less'` :
 
     LessCompiler.less_pattern = '**/*.less' # do not skip partials
 
-When to update templates :never, :when_changed (default) or :allways :
+When to update templates `:never`, `:when_changed` (default) or `:always` :
 
-    LessCompiler.update_templates = :allways # do not check mtimes
+    LessCompiler.update_templates = :always # do not check mtimes
 
 Whether to check @import files if recompilation is needed, this feature
 implies updating templates set to :when_changed.
 
     LessCompiler.check_imports = false # it is on by default
 
-e.g. suppose the content of 'main.less' :
+e.g. suppose the content of `main.less` :
 
     @import '_init';
     .header a { text-decoration: none; }
 
-every time '_init.less' partial is updated 'main.less' should be recompiled !
+every time `_init.less` partial is updated `main.less` should be recompiled !
 
-All supported configuration options might be passed to the compile_stylesheets
+All supported configuration options might be passed to `compile_stylesheets`
 method directly :
 
     LessCompiler.compile_stylesheets(
         :source_path => MY_STYLES_DIR
-        :update_templates => :allways,
+        :update_templates => :always,
         :check_imports => false
     )
 
@@ -91,7 +91,7 @@ plugin init/install phase. You should configure it in an initializer :
       # NOOP for 'test' env
     end
 
-put this under e.g. RAILS_ROOT/config/initializers/less_setup.rb
+put this under e.g. `RAILS_ROOT/config/initializers/less_setup.rb`
 
 LESS
 ----
