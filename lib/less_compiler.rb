@@ -18,7 +18,7 @@ class LessCompiler
 
   @@check_imports = true
   cattr_accessor :check_imports
-
+  
   if defined? Rails.logger
     @@logger = Rails.logger
   else
@@ -102,51 +102,66 @@ class LessCompiler
   private
   
     # Check if the specified stylesheet is in need of an update.
-    def needs_update?(less_file)
+    def needs_update?(less_file, css_required = true)
       css_file = File.join(destination_path, "#{relative_base(less_file)}.css")
-      return true unless File.exist?(css_file)
-      File.mtime(less_file) > File.mtime(css_file) ||
-      (check_imports && contains_updated_import?(less_file, css_file))
+      if File.exist?(css_file)
+        return true if File.mtime(less_file) > File.mtime(css_file)
+      else
+        return true if css_required
+        css_file = nil # does no exist and is not required to
+      end
+      check_imports && contains_updated_import?(less_file, css_file)
     end
 
-    # TODO @import file + mtime caching to speed up things ...
-
     def contains_updated_import?(less_file, css_file = nil)
-      File.open(less_file) do |file|
-        file.each_line do |line|
-          if line =~ /@import\s*['"](.*)['"]\s*;/
-            import_file = $~[1]
-            #case File.extname(import_file)
-            #  when '.css' then next
-            #  when '' then import_file = "#{import_file}.less"
-            #end
-            if File.extname(import_file).empty?
-              import_file = "#{import_file}.less"
-            end
-            if import_file[0, 1] != '/' # add file's relative path :
-              import_file = File.join(File.dirname(file.path), import_file)
-            end
-            if css_file
-              if File.mtime(import_file) > File.mtime(css_file)
-                #puts "LESS contains updated import: #{$~[1]}"
-                return true
-              end
-            else
-              if File.mtime(import_file) > File.mtime(less_file)
-                #puts "LESS contains updated import: #{$~[1]}"
-                return true
-              end
-            end
-            if needs_update?(import_file)
-              #puts "LESS contains updated import: #{$~[1]}"
-              return true
-            end
-          end
+      file_mtime = css_file ? File.mtime(css_file) : File.mtime(less_file)
+      with_each_import(less_file) do |import_file|
+        if file_mtime <= File.mtime(import_file)
+          return true
+        end
+        if needs_update?(import_file, false)
+          return true
         end
       end
       false
     end
 
+    IMPORTS_CACHE = {}
+    
+    def with_each_import(less_file)
+      cache = IMPORTS_CACHE[less_file] || []
+      
+      if ! cache[0] || cache[0] < File.mtime(less_file)
+        IMPORTS_CACHE[less_file] = nil # avoid "concurrent" updates
+        
+        cache.clear
+        cache[0] = File.mtime(less_file)
+
+        File.open(less_file) do |file|
+          file.each_line do |line|
+            if line =~ /@import\s*['"](.*)['"]\s*;/
+              import_file = $~[1]
+              #case File.extname(import_file)
+              #  when '.css' then next
+              #  when '' then import_file = "#{import_file}.less"
+              #end
+              if File.extname(import_file).empty?
+                import_file = "#{import_file}.less"
+              end
+              if import_file[0, 1] != '/' # add file's relative path :
+                import_file = File.join(File.dirname(file.path), import_file)
+              end
+              cache << import_file
+            end
+          end
+        end
+        
+        IMPORTS_CACHE[less_file] = cache
+      end
+      
+      cache[1..-1].each { |import_file| yield(import_file) }
+    end
+    
     # Returns the relative base for the given stylesheet
     def relative_base(stylesheet)
       path = stylesheet.sub(source_path, '').sub('.less', '')

@@ -136,6 +136,36 @@ class LessCompilerTest < ActiveSupport::TestCase
     assert_file_has_same_mtime "#{dir}/main.css", main_css_mtime
   end
 
+  test "4 - multiple partial less stylesheet updates (with IMPORTS_CACHE)" do
+    LessCompiler.source_path = dir = File.join(STYLESHEETS_DIR, '4')
+    FileUtils.touch [ "#{dir}/main.less" ]
+    FileUtils.touch [ "#{dir}/main.css" ]
+    
+    sleep 1 # mtime seconds precision
+    FileUtils.touch [ "#{dir}/_init1.css" ] # doesn't matter which one will touch
+    main_css_mtime = File.mtime "#{dir}/main.css"
+    LessCompiler.compile_stylesheets :check_imports => true
+
+    assert_file_has_newer_mtime "#{dir}/main.css", main_css_mtime
+    
+    main_css_mtime = File.mtime "#{dir}/main.css"
+    sleep 1 # mtime seconds precision
+    FileUtils.touch [ "#{dir}/_init2.less" ]
+    LessCompiler.compile_stylesheets :check_imports => true
+
+    assert_file_has_newer_mtime "#{dir}/main.css", main_css_mtime
+    
+    main_css_mtime = File.mtime "#{dir}/main.css"
+    sleep 1 # mtime seconds precision
+    FileUtils.touch [ "#{dir}/_init3.less" ]
+    LessCompiler.compile_stylesheets :check_imports => true
+
+    assert_file_has_newer_mtime "#{dir}/main.css", main_css_mtime
+    
+    assert ! LessCompiler::IMPORTS_CACHE.empty?
+    assert LessCompiler::IMPORTS_CACHE.has_key? "./test/stylesheets/4/main.less"
+  end
+  
   protected
 
   def assert_file_has_same_mtime(file, mtime)
